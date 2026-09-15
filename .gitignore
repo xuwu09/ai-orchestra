@@ -1,0 +1,12 @@
+# 个人真实档案与快照不入库（模板与示例除外）
+references/capabilities.md
+references/routes.yaml
+workflows/20*-*.md
+
+# 运行时产物
+guard-backups/
+guard.log
+guard.lock
+trial_result.txt
+__pycache__/
+*.pyc

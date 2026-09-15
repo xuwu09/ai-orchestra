@@ -1,0 +1,6 @@
+@echo off
+rem ChatParty 登录看门狗启动模板：复制后改两处路径即可用
+rem ① PYTHON 路径 ② 本脚本所在目录
+set PYTHON=C:\Python313\pythonw.exe
+set HERE=%~dp0
+start "" "%PYTHON%" "%HERE%cp_login_guard.py"

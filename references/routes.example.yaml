@@ -1,0 +1,58 @@
+# routes.yaml — 由 references/scan_routes.py 生成，也可手工维护
+# 模板：复制为 references/routes.yaml 后按本机实际填写（真实 routes.yaml 不要提交到公开仓库）
+#
+# 派发优先级：official-cli > cdp-client > opencli-web > clipboard
+# 语义：alive=false + ensure_available=true = 待拉起（先跑 ensure/launcher 再判，不直接降级）；
+#       真不可用 = installed=false 或 ensure_available 为 false/缺失
+
+# ── 干活组（official-cli 示例）──
+<agent-key>:                      # 如 dsh / codex / claude-code
+  installed: true
+  route: "official-cli"
+  alive: true
+  cli: "<本机 CLI 绝对路径>"
+  note: "<cli> --profile headless '<task>' --cwd <dir>"
+
+# ── 顾问组·CDP 客户端示例 ──
+<doubao-key>:
+  installed: true
+  route: "clipboard"              # cdp 未拉起时降级链的当前落点
+  cdp_alive: false
+  ensure_available: true          # 有幂等 bat / ensure 自愈 → 待拉起而非不可用
+  exe: "<客户端 exe 绝对路径>"
+  launcher: "<幂等启动 bat 绝对路径>"
+  cli: "<CLI 包装脚本绝对路径，status/new/send/extract/ensure 五件套>"
+  note: "cdp_alive=false 是待拉起不是不可用：cli ensure / 幂等 bat 拉起后再判"
+
+<qianwen-key>:
+  installed: true
+  route: "clipboard"
+  cdp_alive: false
+  ensure_available: true
+  exe: "<客户端 exe 绝对路径>"
+  launcher: "<幂等启动 bat 绝对路径>"
+  cli: "<CLI 包装脚本绝对路径>"
+  note: "编辑器不认 JS 合成 Enter → 必须走 CDP 原生 Input 管线（dispatchKeyEvent）"
+
+# ── 顾问组·网页站聚合示例（ChatParty 类多站应用）──
+chatparty:
+  installed: true
+  route: "cdp-client"
+  cdp_alive: true
+  ensure_available: true
+  exe: "<应用 exe 绝对路径>"
+  launcher: "<启动器 bat 绝对路径>"
+  note: "多站网页顾问聚合（各站已登录、看门狗保活）；cdp_alive=false 用启动器 bat 拉起后即恢复；各站按 CDP target URL 匹配，站点强项见 capabilities.md"
+
+# ── 外网成员（web-proxy 示例）──
+<foreign-1>:
+  installed: true
+  route: null
+  proxy_alive: false
+  note: "需要本地代理在线（代理端口在扫描脚本里配置）"
+
+# ── OpenCLI 网页通道 ──
+opencli:
+  installed: false
+  route: null
+  note: "Bridge 扩展须已连接（browser <会话> doctor 验证）"
