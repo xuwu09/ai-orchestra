@@ -36,17 +36,34 @@
 
 ```
 SKILL.md                        # 技能主文档：架构、七步流程、任务包模板、成员管理
+install.ps1 / install.sh        # 一键安装脚本（见上）
 references/
-  capabilities.example.md       # 成员档案模板（复制为 capabilities.md 后填自己的）
+  capabilities.example.md       # 成员档案【完整脱敏示例】：真实在用架构的成员/分工/状态/坑，复制为 capabilities.md 后改本机路径即可
   routes.example.yaml           # 通道路由模板（复制为 routes.yaml 后填本机路径/端口）
   scan_routes.py                # 本机通道扫描脚本（按需配置路径）
   playbooks.md                  # 典型工作流剧本（编码/自媒体/调研/本机任务/建站）
 workflows/
   TEMPLATE.md + INDEX.md        # 工作流沉淀模板与索引
-tools/chatparty/                # ChatParty 顾问通道工具链（登录看门狗 + 试跑脚本）
+tools/chatparty/                # ChatParty 顾问通道工具链（登录看门狗 + 试跑 + cdp_inspect 巡检）
 ```
 
-## 快速开始
+## 一行命令安装
+
+**Windows（PowerShell）**：
+
+```powershell
+irm https://raw.githubusercontent.com/xuwu09/ai-orchestra/main/install.ps1 | iex
+```
+
+**macOS / Linux**：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xuwu09/ai-orchestra/main/install.sh | bash
+```
+
+默认装到 WorkBuddy 技能目录 `~\.workbuddy\skills\ai-orchestra`（可传参改目标，如 Claude Code 的 `~/.claude/skills/`）。装完即获得**完整功能**：角色制架构、七步流程、任务包人话化模板、通道路由、ChatParty 顾问通道工具链（登录看门狗 + 试跑 + 巡检）——`references/capabilities.example.md` 是一份完整在用架构的脱敏版，照抄即可获得同构成员分工。
+
+## 快速开始（手动安装）
 
 1. 把整个目录放进你的 agent 技能目录（如 Claude Code 的 skills 目录、WorkBuddy 的 `~/.workbuddy/skills/`）。
 2. `references/capabilities.example.md` → 复制为 `capabilities.md`，按你的成员清单填档案。
