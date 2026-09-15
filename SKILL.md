@@ -182,7 +182,7 @@ description: 多 AI 协作调度编排技能。当用户要求「调度多个 AI
 | 优先级 | 通道 | 判据 | 实测案例 |
 |---|---|---|---|
 | 1 | **官方 CLI / 无头模式** | 客户端自带 CLI（如 `dsh --profile headless`） | DSH 一次性任务全流程 ✅ |
-| 2 | **CDP 客户端直连** | Chromium 系客户端接受 `--remote-debugging-port`（bat 重启带开关，登录态保留） | 豆包/千问客户端 CLI 包装实测 ✅，均含 ensure 自愈 + 幂等 bat + 开机自启 VBS。**差异点**：豆包 ProseMirror 认 JS 合成 Enter；千问编辑器必须走 CDP 原生 Input 管线（dispatchKeyEvent） |
+| 2 | **CDP 客户端直连** | Chromium 系客户端接受 `--remote-debugging-port`（bat 重启带开关，登录态保留） | 豆包/千问客户端 CLI 包装实测 ✅（示例端口 9225/9226，可自定），均含 ensure 自愈 + 幂等 bat + 开机自启 VBS。**差异点**：豆包 ProseMirror 认 JS 合成 Enter；千问编辑器必须走 CDP 原生 Input 管线（dispatchKeyEvent） |
 | 3 | **OpenCLI 网页** | 网页版 + Bridge 扩展已连（`opencli doctor` 验证） | 千问/豆包网页版 ✅（注意：豆包网页 ProseMirror fill 后 Enter 不认账，需粘贴法） |
 | 4 | **剪贴板接力** | 以上均不可用 | GUI 客户端兜底 |
 | 5 | **用户中转** | 最终兜底 | 组长输出任务包文本块 |

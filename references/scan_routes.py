@@ -56,7 +56,8 @@ CHATPARTY = {
 }
 
 # 外网成员（web-proxy 通道）：本地代理端口 + 浏览器 CDP 端口 + 拉起 bat
-FOREIGN_PROXY_PORT = 51081
+# 代理端口按你自己的本地代理填写（或设环境变量 ORCHESTRA_FOREIGN_PROXY_PORT）
+FOREIGN_PROXY_PORT = int(os.environ.get("ORCHESTRA_FOREIGN_PROXY_PORT", "0"))
 FOREIGN_CDP_PORT = 9227
 FOREIGN_LAUNCHER = r"<start_foreign_browser.bat 绝对路径>"
 FOREIGN_MEMBERS = ["chatgpt", "grok"]
@@ -128,6 +129,9 @@ def scan_chatparty():
 
 
 def scan_foreign(name):
+    if FOREIGN_PROXY_PORT <= 0:
+        return {"installed": True, "route": None, "proxy_alive": False,
+                "note": "代理端口未配置（ORCHESTRA_FOREIGN_PROXY_PORT 或脚本顶部 FOREIGN_PROXY_PORT）"}
     proxy_ok = port_open(FOREIGN_PROXY_PORT)
     if not proxy_ok:
         return {"installed": True, "route": None, "proxy_alive": False,

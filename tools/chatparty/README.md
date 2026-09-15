@@ -1,6 +1,6 @@
 # ChatParty 顾问通道工具链
 
-把 [ChatParty](https://www.chatparty.cn)（多模型聚合桌面应用）里的网页 AI 站点变成脚本可调用的顾问通道。本目录包含两个纯标准库 Python 脚本 + 一份自改教程。
+把 [ChatParty](https://www.chatparty.cn)（多模型聚合桌面应用）里的网页 AI 站点变成脚本可调用的顾问通道。本目录包含三个纯标准库 Python 脚本 + 一份自改教程。
 
 > **⚠️ 合规声明**：本目录**不包含、也不分发** ChatParty 程序本体或其任何修改版。
 > 所有补丁都需要你对自己合法安装的副本自行操作，修改仅供个人本地使用，请勿分发修改后的程序包。
@@ -26,6 +26,18 @@ python trial_send.py kimi "https://www.kimi.com" "通道测试：请只回复两
 ```
 
 原理：CDP 按 URL 前缀匹配 webview target → 编辑器 `scrollIntoView`（多站应用的 webview 常小窗渲染，元素在视口外）→ 视口内可信点击 / 视口外 JS focus → `Input.insertText` → 原生 `dispatchKeyEvent` Enter → 读 `document.body.innerText` 尾部收回复。
+
+### `cdp_inspect.py` — 巡检三合一
+
+接入新站点前的侦察工具（列 target / 探 DOM / 截图）：
+
+```bash
+python cdp_inspect.py list                      # 列出全部 target
+python cdp_inspect.py probe kimi.com            # 探该页输入框选择器、cookie/LS 键名
+python cdp_inspect.py shot kimi.com out.png     # 截图看 webview 实际渲染
+```
+
+用 `probe` 摸清编辑器选择器与登录态存放位置（cookie 名单 or localStorage 键），再据此校准 `cp_login_guard.py` 的 `SITES` / `CUSTOM_HOST_MAP` 检测指标。
 
 ## 依赖
 
