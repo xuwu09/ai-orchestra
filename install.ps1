@@ -34,10 +34,25 @@ if (Test-Path $Target) {
     Write-Host "existing install backed up -> $bak"
 }
 Copy-Item $src $Target -Recurse -Force
+
+# 一键使用：自动生成个人档案与路由表（旧文件已随整个目录备份，不会覆盖用户数据）
+$refs = Join-Path $Target "references"
+foreach ($pair in @(@("capabilities.example.md", "capabilities.md"),
+                    @("routes.example.yaml", "routes.yaml"))) {
+    $dst = Join-Path $refs $pair[1]
+    if (-not (Test-Path $dst)) {
+        Copy-Item (Join-Path $refs $pair[0]) $dst
+        Write-Host "generated references\$($pair[1]) (from $($pair[0]))"
+    } else {
+        Write-Host "kept existing references\$($pair[1])"
+    }
+}
+
 Write-Host ""
 Write-Host "installed -> $Target"
 Write-Host "next steps:"
-Write-Host "  1. references\capabilities.example.md -> copy to capabilities.md, fill your member roster"
-Write-Host "  2. references\routes.example.yaml     -> copy to routes.yaml, fill local paths/ports"
-Write-Host "  3. ChatParty channel (optional): tools\chatparty\README.md"
-Write-Host "  4. tell your agent: 调度多个 AI 完成 XX"
+Write-Host "  1. read TUTORIAL.md  (15 min from zero to first dispatch)"
+Write-Host "  2. optional: ChatParty channel -> tools\chatparty\README.md (edit start_chatparty.bat)"
+Write-Host "  3. optional: foreign advisor group -> tools\foreign-cli\README.md"
+Write-Host "  4. fill references\capabilities.md member roster, then: python references\scan_routes.py"
+Write-Host "  5. tell your agent: 调度多个 AI 完成 XX"

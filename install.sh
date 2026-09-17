@@ -34,10 +34,23 @@ if [ -d "$TARGET" ]; then
 fi
 mkdir -p "$TARGET"
 cp -R "$SRC/." "$TARGET/"
+
+# 一键使用：自动生成个人档案与路由表（旧文件已随整个目录备份，不会覆盖用户数据）
+for pair in "capabilities.example.md capabilities.md" "routes.example.yaml routes.yaml"; do
+    set -- $pair
+    if [ ! -f "$TARGET/references/$2" ]; then
+        cp "$TARGET/references/$1" "$TARGET/references/$2"
+        echo "generated references/$2 (from $1)"
+    else
+        echo "kept existing references/$2"
+    fi
+done
+
 echo ""
 echo "installed -> $TARGET"
 echo "next steps:"
-echo "  1. references/capabilities.example.md -> copy to capabilities.md, fill your member roster"
-echo "  2. references/routes.example.yaml     -> copy to routes.yaml, fill local paths/ports"
-echo "  3. ChatParty channel (optional): tools/chatparty/README.md"
-echo "  4. tell your agent: 调度多个 AI 完成 XX"
+echo "  1. read TUTORIAL.md  (15 min from zero to first dispatch)"
+echo "  2. optional: ChatParty channel -> tools/chatparty/README.md (edit start_chatparty.bat)"
+echo "  3. optional: foreign advisor group -> tools/foreign-cli/README.md"
+echo "  4. fill references/capabilities.md member roster, then: python references/scan_routes.py"
+echo "  5. tell your agent: 调度多个 AI 完成 XX"

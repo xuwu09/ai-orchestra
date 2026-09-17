@@ -2,6 +2,21 @@
 
 本仓库遵循语义化版本（MAJOR.MINOR.PATCH）。所有显著变更记录在此。
 
+## v1.2.0（2026-09-18）
+
+### Added
+
+- **`tools/chatparty/orchestra_bridge.py`** — 组长遥控桥（本次核心）：ChatParty 12 站的 `status / send / read / ensure` 四件套，纯标准库；URL 片段匹配 + worker target 过滤；发送走 native setter / execCommand + 先按钮后 Enter；`read` 支持轮询等待文本稳定。实测「发送→收到」闭环通过。
+- **`tools/chatparty/start_chatparty.bat`** — 幂等启动器模板：带 `--remote-debugging-port=9222` 拉起；「在跑但无 CDP」netstat 检测（官方 exe 不内置 CDP，这是遥控通道的总开关）。
+- **`tools/chatparty/patch_main_customsend46.py` + `replace_v4.py`** — 主进程 trusted 三重门发送补丁工具（实测版本，自改教程配套）：probe 门（elementFromPoint 落点验证）→ focus 门 → value 门（trim 非空）→ Enter；asar 重打包完整实现（integrity 保留 + 重算、offset 重排、size-offset 反写）；replace 工具等进程退出 → 自动备份 → 替换 → 读回校验。锚点不匹配安全退出不写盘。**不分发任何程序本体或修改版**，仅供个人本地自改。
+- **`TUTORIAL.md`** — 详细教程：从零到第一次派单 15 分钟（三条配置路线：最小可用 / ChatParty 顾问团 / 国外顾问组；工具链速查；自改进阶；排障 FAQ）。
+- **安装脚本一键使用增强**：装完自动从脱敏示例生成 `capabilities.md` / `routes.yaml`（已存在则保留），next steps 指向 TUTORIAL.md。
+
+### Changed
+
+- `README.md`：目录结构补 TUTORIAL.md 与新工具；安装说明标注自动生成行为；快速开始加教程入口。
+- `tools/chatparty/README.md`：新增 orchestra_bridge / 启动器 / 主进程补丁三节，自改教程扩写（trusted 输入三重门原理、asar 重打包三坑、提取脚本注入），依赖说明更新。
+
 ## v1.1.0（2026-09-18）
 
 ### Added
