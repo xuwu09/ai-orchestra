@@ -129,6 +129,9 @@ def scan_chatparty():
 
 
 def scan_foreign(name):
+    notes = [FOREIGN_BASE_NOTE]
+    if name in FOREIGN_NOTES:
+        notes.append(FOREIGN_NOTES[name])
     if FOREIGN_PROXY_PORT <= 0:
         return {"installed": True, "route": None, "proxy_alive": False,
                 "note": "代理端口未配置（ORCHESTRA_FOREIGN_PROXY_PORT 或脚本顶部 FOREIGN_PROXY_PORT）"}
@@ -138,9 +141,12 @@ def scan_foreign(name):
                 "note": "需要本地代理在线（代理口 %d 未监听）" % FOREIGN_PROXY_PORT}
     cdp_ok = port_open(FOREIGN_CDP_PORT)
     route = "web-proxy" if cdp_ok else None
-    return {"installed": True, "route": route, "proxy_alive": True, "cdp_alive": cdp_ok,
+    info = {"installed": True, "route": route, "proxy_alive": True, "cdp_alive": cdp_ok,
             "ensure_available": True, "launcher": FOREIGN_LAUNCHER,
-            "note": "web-proxy 通道（本地代理 + 独立浏览器 profile CDP）；额度有限省着用，双轨成员"}
+            "note": "；".join(notes)}
+    if FOREIGN_CLI and "<" not in FOREIGN_CLI:
+        info["cli"] = FOREIGN_CLI
+    return info
 
 
 def scan_opencli():

@@ -44,12 +44,57 @@ chatparty:
   launcher: "<启动器 bat 绝对路径>"
   note: "多站网页顾问聚合（各站已登录、看门狗保活）；cdp_alive=false 用启动器 bat 拉起后即恢复；各站按 CDP target URL 匹配，站点强项见 capabilities.md"
 
-# ── 外网成员（web-proxy 示例）──
-<foreign-1>:
+# ── 国外顾问组（web-proxy 通道示例；五站共用同一本地代理 + 同一独立浏览器 profile）──
+# 登录态在独立 profile 里人工登录一次即持久；发送走 tools/foreign-cli 三重门管线（页面/iframe 双形态）
+chatgpt:
   installed: true
-  route: null
-  proxy_alive: false
-  note: "需要本地代理在线（代理端口在扫描脚本里配置）"
+  route: "web-proxy"
+  proxy_alive: true
+  cdp_alive: true
+  ensure_available: true
+  launcher: "<启动独立浏览器 profile 的幂等 bat 绝对路径（五站共用同一 bat）>"
+  cli: "<tools/foreign-cli/foreign_cli.py 绝对路径>"
+  note: "web-proxy 通道（本地代理 + 独立浏览器 profile CDP）；发送→回复闭环 E2E 通过"
+
+grok:
+  installed: true
+  route: "web-proxy"
+  proxy_alive: true
+  cdp_alive: true
+  ensure_available: true
+  launcher: "<同 chatgpt，五站共用>"
+  cli: "<tools/foreign-cli/foreign_cli.py 绝对路径>"
+  note: "输入管线通；回复流可能被代理 WebSocket 阻断（间歇性，页内 Try again/刷新可恢复）"
+
+copilot:
+  installed: true
+  route: "web-proxy"
+  proxy_alive: true
+  cdp_alive: true
+  ensure_available: true
+  launcher: "<同 chatgpt，五站共用>"
+  cli: "<tools/foreign-cli/foreign_cli.py 绝对路径>"
+  note: "发送→回复闭环 E2E 通过（copilot.microsoft.com / copilot.com 双域名宽匹配）"
+
+perplexity:
+  installed: true
+  route: "web-proxy"
+  proxy_alive: true
+  cdp_alive: true
+  ensure_available: true
+  launcher: "<同 chatgpt，五站共用>"
+  cli: "<tools/foreign-cli/foreign_cli.py 绝对路径>"
+  note: "发送→回复闭环 E2E 通过"
+
+gemini:
+  installed: true
+  route: "web-proxy"
+  proxy_alive: true
+  cdp_alive: true
+  ensure_available: true
+  launcher: "<同 chatgpt，五站共用>"
+  cli: "<tools/foreign-cli/foreign_cli.py 绝对路径>"
+  note: "发送→回复闭环 E2E 通过"
 
 # ── OpenCLI 网页通道 ──
 opencli:
