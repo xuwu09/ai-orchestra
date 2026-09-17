@@ -28,12 +28,22 @@ Send pipeline = three gates (ported from the ChatParty toolchain):
   -> trusted click -> focus gate (activeElement inside editor)
   -> insertText -> value gate (non-empty, trim) -> trusted Enter.
 
+Anti-rate-limit throttle (measured values, ported from dsh-deepseek-web-login):
+  same-site sends are spaced by a RANDOM 2-4s gap (a fixed gap with ~zero
+  variance is itself a timer fingerprint; two concurrent windows got a
+  1-day mute within 6 minutes). Tunable via ORCHESTRA_FOREIGN_GAP_MIN /
+  ORCHESTRA_FOREIGN_GAP_MAX (seconds; set both 0 to disable).
+  Note: "sent" only proves the front-end submit (URL change) — verify the
+  reply via `extract`; a refusal/limitation notice in the reply area means
+  the server rejected it (muted state is only learnable from refusals).
+
 Dependency: pip install websocket-client (the only third-party package).
 """
 import argparse
 import io
 import json
 import os
+import random
 import socket
 import subprocess
 import sys
@@ -62,6 +72,11 @@ SITE_URL_HINTS = {
     "perplexity": "perplexity.ai",
     "gemini": "gemini.google.com",
 }
+
+# Same-site send spacing (seconds). Random gap, measured from last send END.
+GAP_MIN = float(os.environ.get("ORCHESTRA_FOREIGN_GAP_MIN", "2.0"))
+GAP_MAX = float(os.environ.get("ORCHESTRA_FOREIGN_GAP_MAX", "4.0"))
+_last_send = {}  # site -> time.monotonic() of last send end
 
 
 def port_open(port, host=CDP_HOST, timeout=2):
@@ -246,6 +261,10 @@ def native_send(page, text, log=None):
     Works on page tabs and OOPIF iframes. Returns a result dict."""
     if log is None:
         log = []
+    try:
+        before_href = page.eval_js("location.href") or ""
+    except Exception:
+        before_href = ""
     box = scan = None
     for attempt in range(4):
         box = page.eval_js(FIND_MARK_JS)
@@ -290,7 +309,8 @@ def native_send(page, text, log=None):
     time.sleep(2.0)
     after = page.eval_js(AFTER_JS)
     log.append(f"after: {json.dumps(after, ensure_ascii=False)}")
-    return {"sent": True, "after": after, "log": log}
+    url_changed = (after.get("href") or "") != before_href[:90]
+    return {"sent": True, "after": after, "url_changed": url_changed, "log": log}
 
 
 def cmd_status(_):
@@ -366,6 +386,11 @@ def cmd_send(args):
                                    "or start the foreign browser manually"},
                          ensure_ascii=False))
         return 1
+    if GAP_MAX > 0:
+        now = time.monotonic()
+        wait = _last_send.get(site, now) + random.uniform(GAP_MIN, GAP_MAX) - now
+        if wait > 0:
+            time.sleep(wait)
     tgt = pick_target(site)
     if not tgt:
         print(json.dumps({"error": f"no page target for {site} — open it (or its "
@@ -376,12 +401,15 @@ def cmd_send(args):
     try:
         page.cmd("Runtime.enable")
         r = native_send(page, text)
+        _last_send[site] = time.monotonic()
         if r.get("aborted"):
             print(json.dumps({"site": site, "error": "aborted: " + r["aborted"],
                               "log": r.get("log", [])}, ensure_ascii=False))
             return 1
         print(json.dumps({"site": site, "sent": "gated-enter", "chars": len(text),
-                          "after": r.get("after"), "kind": tgt.get("type")},
+                          "after": r.get("after"), "url_changed": r.get("url_changed"),
+                          "kind": tgt.get("type"),
+                          "note": "front-end submit only; verify reply via extract"},
                          ensure_ascii=False))
     finally:
         page.close()

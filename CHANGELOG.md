@@ -2,6 +2,28 @@
 
 本仓库遵循语义化版本（MAJOR.MINOR.PATCH）。所有显著变更记录在此。
 
+## v1.3.0（2026-09-18）
+
+### Added
+
+- **`references/discussion-protocols.md`** — 讨论工作流协议库（本次核心）：把两个 DSH 生态项目（[dsh-plugin-roundtable](https://github.com/9931666/dsh-plugin-roundtable)、[dsh-deepseek-web-login](https://github.com/cv-superding/dsh-deepseek-web-login)，均致谢）的可借鉴设计，落到 ai-orchestra 的纯编排层（与具体站点无关）：
+  - **三种讨论模式**：主持人统筹 / 平等互辩 / 针锋相对红队——模式选择表 + 各自的轮次编排语义。
+  - **汇聚网关**：round2 禁止全文拼接上一轮回答（token 爆炸 + 上下文空转根因）——LLM 观点自动拆分（段落切分兜底）→ 去重归并 → 分维度摘要后再下发。
+  - **红队评审闭环**：三态表态（支持 / 驳回必填理由 / 取消）、maxReviewPass=3、驳回认定 ≥3 触发重新协商、驳回理由回传给原作者修订。
+  - **预算熔断**：单任务最大轮次/最大消息数上限，超限熔断出阶段结论而非死循环。
+  - **人类决策暂停**：关键分歧点暂停出决策卡片（选项+各立场一句话），等人拍板再继续。
+  - **落盘与导出**：transcript append-only 逐轮追加、export.md 定稿导出、原子写（tmp+rename）+ malformed 计数。
+  - **防风控节流**：同站发送随机间隔 2000~4000ms（固定间隔方差≈0 是定时器特征，双窗口高并发实测触发封禁）；明确「发送成功 ≠ 服务端接受」；429 按 retryAfter 退避。muted 教训只能从「生成被拒」学到——只读探查探不出来，故刻意不做自动换号。
+- **`tools/chatparty/patch_main_customsend47.py`** — **RESCUE 群发漏站补扫**（实测版本）：群发循环在渲染进程（50ms 内连发 IPC），漏站 = 渲染进程没发 IPC。补扫挂在 `ipcMain.handle("send-message-to-webview")` wrapper：60s 滑窗记账 → ≥3 条完全一致消息判定群发语义（单发/2 站对比不触发）→ 3.5s 静默 → DOM 枚举 `webview[id]` → 缺失站直调原 handler 补发（复用 custom script + trusted 全套）；防重 = 同消息 90s 时间桶。实测：两次群发分别救回 kimi 单站、kimi+知乎直达双站（时序 ENTRY→+3.5s 补扫→BRANCH→跳会话页，符合设计）。
+- **`tools/chatparty/patch_main_customsend48.py`** — **豆包改版适配**（实测版本）：豆包前端改版后 guidance textarea 形态消失（编辑器变 tiptap ProseMirror contenteditable、发送按钮 class 更换），custom script 填字成功但按旧 class 找按钮静默放弃。五锚点 D1~D5 把 `__cpIsDoubao` 并入 metaso/kimi 的 attach + 三重门 trusted 分支（contenteditable 版表达式自动适用），custom 填字在前、trusted Enter 兜底。实测发送后跳会话页。
+
+### Changed
+
+- `SKILL.md`：第 4 步「定稿标准」后新增**红队评审**段落（定稿后可选环节），引用 `references/discussion-protocols.md`。
+- `tools/foreign-cli/foreign_cli.py`：**防风控节流**——同站发送前按 `ORCHESTRA_FOREIGN_GAP_MIN/MAX`（默认 2.0~4.0s）随机等待；`send` 输出新增 `url_changed`（URL 是否变化，辅助判定服务端是否真正接受），note 明确「front-end submit only; verify reply via extract」。
+- `tools/chatparty/README.md`：主进程补丁节提级到 v4.7/v4.8（RESCUE 补扫机制、豆包并入 trusted 分支、无害填字竞态说明），依赖说明同步。
+- `.gitignore`：排除补丁产物 JS（`main_v4*_sendpatch.js`），只入库 patch 工具脚本。
+
 ## v1.2.0（2026-09-18）
 
 ### Added

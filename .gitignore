@@ -10,3 +10,4 @@ guard.lock
 trial_result.txt
 __pycache__/
 *.pyc
+tools/chatparty/main_v4*_sendpatch.js
