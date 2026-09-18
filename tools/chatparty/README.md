@@ -25,12 +25,18 @@ python orchestra_bridge.py status            # 各站 target/标题/登录线索
 python orchestra_bridge.py ensure            # 幂等拉起 ChatParty（CDP 9222 在线即返回）
 python orchestra_bridge.py send metaso "通道测试：请只回复两个字——收到"
 python orchestra_bridge.py read metaso 60    # 读回复（seconds>0 时轮询等文本稳定）
+python orchestra_bridge.py broadcast "任务包全文"            # 全员发布+对账清单
+python orchestra_bridge.py broadcast "…" only=kimi,deepseek  # 指定站 / skip=k 排除
 ```
 
 - 12 站按 URL 片段匹配（SITES 表按你的站点清单维护），worker/静态资源 target 自动过滤
 - 发送 = 可见 textarea 用 native setter + input 事件 / contenteditable 用 execCommand，先按钮后 Enter（React 受控组件不认直赋值）；回复读 `body.innerText` 尾部，由组长（LLM）自行解析
 - 程序路径走环境变量 `ORCHESTRA_CHATPARTY_EXE`（ensure 用）；日志 `orchestra_bridge.log`
 - 典型闭环：`send` → `read <key> 60`（轮询文本稳定）→ 组长解析出回复
+- **broadcast 对账**（2026-09-18 加）：逐站发送、站间 2-4s 随机节流（防风控），末尾输出四态清单——`sent`（URL 跳转确认）/ `verify`（URL 未变但残留少，可能已在会话页，read 确认）/ `suspicious`（疑似假成功，read 验证后重发或换站）/ `missing`（无 target，开卡/补发）；退出码非 0 = 有 missing 或 suspicious
+- **多 target 防僵尸**（2026-09-18 加）：同站多 webview（如 deepseek 双 target）按 title 排序取最优，首选发送失败自动换下一候选（`used_candidate` 回报实锤）
+- **假成功自救**：URL 未变且残留 >8 字自动走全 trusted 管线（清框→trusted click→Input.insertText→trusted Enter）；发送成功后输入框有残留也自动清（metaso 课）
+- `clear_doubao_customkey.py`：清豆包 custom script 的 sendMessage（消「1+11+1」竞态；getLLMLastMessage 保留）。⚠️ 生效需重启 ChatParty（会丢 webview 会话，择时手动重启）
 
 ### `cp_login_guard.py` — 登录看门狗
 

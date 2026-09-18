@@ -8,6 +8,7 @@ ChatParty 以 --remote-debugging-port=9222 启动（start_chatparty.bat 模板�
 用法：
   python orchestra_bridge.py status                 # 各站 target/标题/登录线索（组长选站用）
   python orchestra_bridge.py send <key> <message>   # 向指定站发消息（key 见 SITES，或直接给 URL 片段）
+  python orchestra_bridge.py broadcast <msg>        # 全员发布+对账清单（only=k1,k2 / skip=k 过滤；站间 2-4s 节流）
   python orchestra_bridge.py read <key> [seconds]   # 读该站回复（页面文本尾部；seconds>0 时轮询等待文本稳定）
   python orchestra_bridge.py ensure                 # 幂等拉起 ChatParty（已跑则直接返回）
 
@@ -171,9 +172,14 @@ def _is_noise(url):
 
 
 def find_target(key):
-    """按 key 找 CDP target：先 SITES 表 url 片段，再当作用户自填 url 片段。"""
-    frag = SITES.get(key, (key, key, ''))[0]
-    main_first = []
+    """按 key 找 CDP target：先 SITES 表 url 片段，再当作用户自填 url 片段。
+
+    多候选时过滤僵尸 target（2026-09-18 deepseek 双 target 课）：
+    title 含站点显示名 > 不含 > 空标题；同组内 title 更长（加载更完整）优先。
+    返回值附 _candidates（全部候选 WS URL）供 _send_one 首选失败时自动换下一个。
+    """
+    frag, name = SITES.get(key, (key, key, ''))[:2]
+    cands = []
     for t in cdp_list():
         url = t.get('url') or ''
         if 'index.html' in url or url.startswith('file://'):
@@ -181,8 +187,24 @@ def find_target(key):
         if _is_noise(url):
             continue  # worker/静态资源不参与匹配
         if frag in url:
-            main_first.append(t)
-    return main_first[0] if main_first else None
+            cands.append(t)
+    if not cands:
+        return None
+    if len(cands) > 1:
+        def _rank(t):
+            title = (t.get('title') or '').strip()
+            if not title:
+                return (2, 0)
+            return (0, -len(title)) if name.lower() in title.lower() else (1, -len(title))
+        cands.sort(key=_rank)
+    if len(cands) == 1:
+        return cands[0]
+    t = dict(cands[0])  # 浅拷贝附元信息，不动原始 target
+    t['_ambiguous'] = len(cands)
+    t['_others'] = [((c.get('title') or '')[:30] + '|' + (c.get('url') or '')[:70])
+                    for c in cands[1:]]
+    t['_candidates'] = [c.get('webSocketDebuggerUrl') for c in cands]
+    return t
 
 
 # ---------- 注入 JS ----------
@@ -191,6 +213,7 @@ SEND_JS_TEMPLATE = r"""
 (async function() {
   const MSG = __MSG_JSON__;
   const BTN_SEL = __BTN_SEL_JSON__;
+  const HREF0 = location.href;
 
   function visible(el) {
     if (!el) return false;
@@ -239,7 +262,16 @@ SEND_JS_TEMPLATE = r"""
     await new Promise(r => setTimeout(r, 120));
     input.dispatchEvent(new KeyboardEvent('keyup', ev));
   }
-  return {ok: true, by: sentByBtn ? 'button' : 'enter', input: input.tagName};
+
+  // 4) 验证：发送成功≠站点接受。等 1.8s 看 URL 是否跳会话页 + 输入框是否清空。
+  // 残留字先不清——留给 python 侧 trusted Enter 重试，仍失败才由 CLEAR_INPUT_JS 清。
+  await new Promise(r => setTimeout(r, 1800));
+  const urlChanged = location.href !== HREF0;
+  const leftover = input.tagName === 'TEXTAREA' || input.tagName === 'INPUT'
+    ? (input.value || '').length
+    : (input.innerText || '').length;
+  return {ok: true, by: sentByBtn ? 'button' : 'enter', input: input.tagName,
+          url_changed: urlChanged, href: location.href.slice(0, 120), leftover: leftover};
 })()
 """
 
@@ -249,6 +281,37 @@ READ_JS = r"""
   return {title: document.title.slice(0, 60), url: location.href.slice(0, 120),
           tail: t.replace(/\n{3,}/g, '\n\n').slice(-2600)};
 })()
+"""
+
+FOCUS_INPUT_JS = r"""
+(function(){var i=document.querySelector('textarea');
+if(!i) i=document.querySelector('[contenteditable="true"]');
+if(i) i.focus(); return !!i;})()
+"""
+
+BOX_JS = r"""
+(function(){var i=document.querySelector('textarea');
+if(!i || !i.offsetParent) i=document.querySelector('[contenteditable="true"]');
+if(!i) return 'no-input';
+i.scrollIntoView({block:'center'});
+var r=i.getBoundingClientRect();
+return JSON.stringify({x: r.x + r.width/2, y: r.y + r.height/2});})()
+"""
+
+CLEAR_INPUT_JS = r"""
+(function(){var i=document.querySelector('textarea');
+if(!i) i=document.querySelector('[contenteditable="true"]');
+if(!i) return 'no-input';
+i.focus();
+if(i.tagName==='TEXTAREA'||i.tagName==='INPUT'){
+  var p=i.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;
+  Object.getOwnPropertyDescriptor(p,'value').set.call(i,'');
+  i.dispatchEvent(new Event('input',{bubbles:true}));
+}else{
+  document.execCommand('selectAll',false,null);
+  document.execCommand('delete',false,null);
+}
+return 'cleared';})()
 """
 
 
@@ -302,23 +365,97 @@ def _key_or_frag(key):
     return key  # 当作自定义 url 片段
 
 
-def cmd_send(key, message):
-    key = _key_or_frag(key)
-    tgt = find_target(key)
-    if not tgt:
-        print(json.dumps({'ok': False, 'error': f'no cdp target for {key}（卡片未开或站名不对，先 status 看 open_sites）'},
-                         ensure_ascii=False))
-        return 1
+def _send_via(ws_url, key, message):
+    """对给定 CDP target WS 发送（发送主体）。返回 out dict。"""
     js = SEND_JS_TEMPLATE.replace('__MSG_JSON__', json.dumps(message, ensure_ascii=False)) \
                          .replace('__BTN_SEL_JSON__', json.dumps(SITES.get(key, ('', '', ''))[2]))
     try:
-        ws = WS(tgt['webSocketDebuggerUrl'])
+        ws = WS(ws_url)
         r = eval_js(ws, js, await_promise=True)
+        # 5) 假成功重试：富文本编辑器（Lexical/tiptap 类）拒收合成事件，且 execCommand
+        #    填的字不在编辑器 state 里——Enter 也没用。走全 trusted 管线（trial_send.py
+        #    在 Kimi 验证的路线）：清残留 → trusted click 编辑器中心 → Input.insertText
+        #    重填 → trusted Enter。残留 >8 字才触发（挡掉豆包会话页 URL 不变的误报）。
+        if isinstance(r, dict) and r.get('ok') and r.get('url_changed') is False \
+                and (r.get('leftover') or 0) > 8:
+            try:
+                eval_js(ws, CLEAR_INPUT_JS)
+                time.sleep(0.3)
+                box = eval_js(ws, BOX_JS)
+                if isinstance(box, str):
+                    b = json.loads(box)
+                    for tp in ('mousePressed', 'mouseReleased'):
+                        ws.cmd('Input.dispatchMouseEvent',
+                               {'type': tp, 'x': int(b['x']), 'y': int(b['y']),
+                                'button': 'left', 'clickCount': 1})
+                    time.sleep(0.4)
+                    ws.cmd('Input.insertText', {'text': message})
+                    time.sleep(0.5)
+                    for tp in ('rawKeyDown', 'keyDown'):
+                        ws.cmd('Input.dispatchKeyEvent',
+                               {'type': tp, 'windowsVirtualKeyCode': 13,
+                                'code': 'Enter', 'key': 'Enter', 'text': '\r'})
+                    ws.cmd('Input.dispatchKeyEvent',
+                           {'type': 'keyUp', 'windowsVirtualKeyCode': 13,
+                            'code': 'Enter', 'key': 'Enter'})
+                    time.sleep(1.8)
+                    after = eval_js(ws, 'location.href')
+                    r['trusted_retry'] = isinstance(after, str) and after != r.get('href')
+                    if r['trusted_retry']:
+                        r['url_changed'] = True
+                        r['href'] = str(after)[:120]
+            except Exception as e2:
+                r['trusted_retry_error'] = str(e2)[:100]
+            if not r.get('url_changed'):
+                eval_js(ws, CLEAR_INPUT_JS)  # 仍失败：清残留，避免污染下一轮
+        # 6) 成功也清残留（2026-09-18 metaso 课：url_changed=true 但框留 240 字，污染下一轮）
+        if isinstance(r, dict) and r.get('ok') and r.get('url_changed') \
+                and (r.get('leftover') or 0) > 0:
+            try:
+                if eval_js(ws, CLEAR_INPUT_JS) == 'cleared':
+                    r['cleaned'] = True
+            except Exception:
+                pass
         ws.close()
     except Exception as e:
         r = {'ok': False, 'error': str(e)[:200]}
     out = {'ok': bool(r and not isinstance(r, dict) or (isinstance(r, dict) and r.get('ok'))),
            'site': key, 'detail': r}
+    # 发送成功≠站点接受：url_changed=False 时输入框字已清，需重发或换站（2026-09-18 千问假成功课）
+    if isinstance(r, dict) and r.get('ok') and r.get('url_changed') is False:
+        out['url_changed'] = False
+        out['note'] = 'front-end submit only; editor rejected synthetic Enter/button — verify via read, likely resend'
+    elif isinstance(r, dict) and r.get('url_changed'):
+        out['url_changed'] = True
+    return out
+
+
+def _send_one(key, message):
+    """向单站发送（cmd_send / cmd_broadcast 共用核心）。返回 out dict，不打印。
+
+    多候选 target（deepseek 双 webview）时首选失败自动换下一个候选重试——
+    不猜谁是僵尸，能发的那个总会成功；成功所用候选序号回填 used_candidate。
+    """
+    key = _key_or_frag(key)
+    tgt = find_target(key)
+    if not tgt:
+        return {'ok': False, 'site': key,
+                'error': f'no cdp target for {key}（卡片未开或站名不对，先 status 看 open_sites）'}
+    cands = tgt.get('_candidates') or [tgt.get('webSocketDebuggerUrl')]
+    out, ci = {}, 0
+    for ci, cu in enumerate(cands):
+        out = _send_via(cu, key, message)
+        if out.get('ok') or ci == len(cands) - 1:
+            break
+    if len(cands) > 1:
+        out['ambiguous_targets'] = len(cands)  # 僵尸过滤已生效，附候选数备查
+        if out.get('ok') and ci > 0:
+            out['used_candidate'] = ci  # 首选 target 发送失败、第 N 候选成功的实锤
+    return out
+
+
+def cmd_send(key, message):
+    out = _send_one(key, message)
     print(json.dumps(out, ensure_ascii=False, indent=1))
     log(f"send {key}: {json.dumps(out, ensure_ascii=False)[:200]}")
     return 0 if out['ok'] else 1
@@ -357,6 +494,43 @@ def cmd_read(key, wait_seconds=0):
         return 1
     print(json.dumps({'ok': True, 'site': key, **best}, ensure_ascii=False, indent=1))
     return 0
+
+
+def cmd_broadcast(message, only=None, skip=None, gap=(2.0, 4.0)):
+    """全员发布+对账（2026-09-18 改进项落地）：逐站发送，站间 2-4s 随机节流
+    （防风控，同 foreign_cli v1.3.0 参数），末尾输出四态对账清单——
+    - sent       已送达（URL 跳转确认，或 trusted fallback 重试成功）
+    - verify     已提交但 URL 未变且残留少——可能已在会话页（豆包），read 验证
+    - suspicious 疑似假成功（URL 未变且残留多，fallback 未救回）——read 验证后重发或换站
+    - missing    无 CDP target（卡片未开）或发送异常
+    """
+    import random
+    keys = [k for k in SITES
+            if (not only or k in only) and (not skip or k not in skip)]
+    sent, verify, suspicious, missing = [], [], [], []
+    for i, k in enumerate(keys):
+        if i:
+            time.sleep(random.uniform(*gap))
+        out = _send_one(k, message)
+        d = out.get('detail') if isinstance(out.get('detail'), dict) else {}
+        if not out.get('ok'):
+            missing.append({'key': k,
+                            'reason': (out.get('error') or d.get('error') or 'send failed')[:80]})
+        elif out.get('url_changed') is True:
+            sent.append(k)
+        elif (d.get('leftover') or 0) > 8:
+            suspicious.append({'key': k, 'leftover': d.get('leftover'),
+                               'trusted_retry': bool(d.get('trusted_retry'))})
+        else:
+            verify.append(k)
+    out = {'total': len(keys), 'sent': sent, 'verify': verify,
+           'suspicious': suspicious, 'missing': missing,
+           'hint': ('missing=未送达（开卡/补发）；suspicious=疑似假成功（read 验证后重发或换站）；'
+                    'verify=URL 未变但残留少（可能已在会话页，read 确认）')}
+    print(json.dumps(out, ensure_ascii=False, indent=1))
+    log(f"broadcast: sent={sent} verify={verify} "
+        f"susp={[s['key'] for s in suspicious]} miss={[m['key'] for m in missing]}")
+    return 0 if not missing and not suspicious else 1
 
 
 def _chatparty_process_running():
@@ -417,6 +591,14 @@ def main():
         return cmd_status()
     if cmd == 'send' and len(args) >= 3:
         return cmd_send(args[1], ' '.join(args[2:]))
+    if cmd == 'broadcast' and len(args) >= 2:
+        only = skip = None
+        for a in args[2:]:
+            if a.startswith('only='):
+                only = {x for x in a[5:].split(',') if x}
+            elif a.startswith('skip='):
+                skip = {x for x in a[5:].split(',') if x}
+        return cmd_broadcast(args[1], only=only, skip=skip)
     if cmd == 'read' and len(args) >= 2:
         return cmd_read(args[1], int(args[2]) if len(args) > 2 else 0)
     if cmd == 'ensure':

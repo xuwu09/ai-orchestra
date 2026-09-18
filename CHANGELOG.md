@@ -2,6 +2,27 @@
 
 本仓库遵循语义化版本（MAJOR.MINOR.PATCH）。所有显著变更记录在此。
 
+## v1.3.1（2026-09-18）
+
+> 来源：DSH 实战两轮测试 + 教育产品页成品验收暴露的六个缺口，全部补上并实测。
+
+### Added
+
+- **`tools/chatparty/orchestra_bridge.py` — `broadcast` 子命令**（全员发布+对账）：逐站发送、站间 2~4s 随机节流（同 foreign-cli 防风控参数），末尾输出四态对账清单——`sent`（URL 跳转确认）/ `verify`（URL 未变但残留少，可能已在会话页，read 确认）/ `suspicious`（疑似假成功，read 验证后重发或换站）/ `missing`（无 target，开卡/补发）；支持 `only=k1,k2` / `skip=k` 过滤；退出码非 0 = 有 missing 或 suspicious。实测 `only=kimi,deepseek` 分类全对。
+- **多 target 防僵尸**：同站多 webview（deepseek 双 target 实测）按 title 排序取最优（含站名 > 不含 > 空；同组 title 更长者优先），首选发送失败自动换下一候选重试，`used_candidate` 回报实锤。
+- **假成功自救（全 trusted 管线 fallback）**：send 后验证 URL 跳转与输入框残留——URL 未变且残留 >8 字时自动走全 trusted 管线（清残留 → trusted click 编辑器中心 → `Input.insertText` 重填 → trusted Enter）→ 复验 URL。实测千问、知乎直达从假成功中复活（Lexical 类富文本编辑器拒收合成事件的根因）。发送成功但框有残留也自动清（metaso 240 字残留课）。
+- **`tools/chatparty/clear_doubao_customkey.py`** — 清豆包 custom script 的 `sendMessage`（消「1+11+1」填字竞态；`getLLMLastMessage` 保留——读回复依赖）。键的真实位置：主窗口 `chatallai_custom_scripts` → `doubao` → `scripts.sendMessage`。⚠️ 生效需重启 ChatParty（会丢全部 webview 会话）。
+- **SKILL.md 三个门 + 通道路由规则**（教育产品页实战）：
+  - **ChatParty 通道选择与对账**：群发用原生多模型讨论+RESCUE 兜底，单站才用 bridge；url_changed=false 必须重发或换站；逐站派发后对账缺谁补谁。
+  - **合规门**：对外交付必检广告法红线，指定一名顾问专职审（全员同话术评审会集体漏掉合规——实测 10 顾问无一拦截「平均提分 27 分」类文案）。
+  - **交付前验收门**：硬指标 checklist 逐项打勾 + 新眼复审（派未参与制作的顾问通读成品）。
+  - **收敛门（硬 gate）**：把「多审原则 3 轮起步」从口号变成检查点——轮次下限 ≥2、收敛判据全满足（意见 100% 处置记录 / 本轮无新增实质意见 / 修订稿经提意见者本人确认——沉默≠确认 / 合规已专审）、回复率 <60% 不算收敛、熔断 4~5 轮僵局升级人类决策。DSH 实测一轮意见就开工，正是没门拦住的后果。
+- **`references/discussion-protocols.md` 四个新节**：合规审查清单（广告法红线五类表 + 教育/医疗/金融行业红线 + 成品遗留物检查）、评审维度分配表（结构/合规/技术/转化互斥派单，意见带维度标签，合规一票否决）、任务包落盘协议（`discussions/<时间戳>-<主题>/` 四文件：task.md 不可变 + transcript.jsonl append-only + review.md 按维度归并 + export.md 交付随附）、多轮打磨协议（轮次结构 + 收敛判据 + 假收敛黑名单 + 熔断）。
+
+### Fixed
+
+- `orchestra_bridge.py` send/read 假成功误报：豆包等站点「已在会话页再发消息 URL 不变」不再误判为失败（残留阈值 >8 字区分）。
+
 ## v1.3.0（2026-09-18）
 
 ### Added
